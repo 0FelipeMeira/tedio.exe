@@ -1,6 +1,9 @@
 // ---------- Persistência ----------
 const STORAGE_KEY = "figurinhas.colecao.v1";
 
+// Imagem usada no lugar de "?" para cartas ainda não reveladas/descobertas
+const UNKNOWN_IMG = "https://static.pokemonpets.com/images/monsters-images-800-800/4228-Unown-Question.webp";
+
 function carregarEstado() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -124,7 +127,7 @@ function mostrarCartas(cartas, novasIds) {
     cardEl.innerHTML = `
       <div class="card-inner">
         <div class="card-face card-back">
-          <span class="card-back-glyph">?</span>
+          <img class="card-back-img" src="${UNKNOWN_IMG}" alt="" />
         </div>
         <div class="card-face card-front">
           ${isNova ? '<span class="badge-new">NOVA!</span>' : ""}
@@ -188,7 +191,7 @@ function renderizarColecao() {
           ${qtd > 1 ? `<div class="mini-qty">x${qtd}</div>` : ""}
         `
         : `
-          <div class="mini-emoji locked-glyph">❓</div>
+          <img class="mini-locked-img" src="${UNKNOWN_IMG}" alt="" />
           <div class="mini-name">???</div>
         `;
       grid.appendChild(item);
