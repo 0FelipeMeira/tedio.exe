@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Colecionador de Figurinhas</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header>
+
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="pacotes">Abrir Pacote</button>
+      <button class="tab-btn" data-tab="colecao">Minha Coleção</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="view-pacotes" class="view active">
+      <div id="pack-area"><span class="pack-label"></span></div>
+      <div id="reveal-area"></div>
+      <button id="pack-button" class="primary-btn">Abrir Pacote</button>
+    </section>
+
+    <section id="view-colecao" class="view">
+      <div class="stats-bar">
+        <div class="stat">
+          <div class="value"><span id="stats-collected">0</span>/<span id="stats-total">0</span></div>
+          <div class="label">Figurinhas</div>
+        </div>
+        <div class="stat">
+          <div class="value" id="stats-packs">0</div>
+          <div class="label">Pacotes abertos</div>
+        </div>
+      </div>
+
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill" style="width: 0%">0%</div>
+      </div>
+
+      <div id="collection-grid"></div>
+
+      <div class="danger-zone">
+        <button id="reset-btn" class="text-btn">Reiniciar coleção</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast"></div>
+
+  <script src="js/cards.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
