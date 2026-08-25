@@ -1,56 +1,229 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bestiário Mágico — Colecionador de Figurinhas</title>
-  <link rel="stylesheet" href="css/style.css" />
-</head>
-<body>
-  <header>
-    <h1>Bestiário Mágico</h1>
-    <p>Abra pacotes e colecione todas as figurinhas!</p>
+// ---------- Persistência ----------
+const STORAGE_KEY = "figurinhas.colecao.v1";
 
-    <nav class="tabs">
-      <button class="tab-btn active" data-tab="pacotes">Abrir Pacote</button>
-      <button class="tab-btn" data-tab="colecao">Minha Coleção</button>
-    </nav>
-  </header>
+// Imagem usada no lugar de "?" para cartas ainda não reveladas/descobertas
+const UNKNOWN_IMG = "https://static.pokemonpets.com/images/monsters-images-800-800/4228-Unown-Question.webp";
 
-  <main>
-    <section id="view-pacotes" class="view active">
-      <div id="pack-area">🎴</div>
-      <div id="reveal-area"></div>
-      <button id="pack-button" class="primary-btn">Abrir Pacote</button>
-    </section>
+function carregarEstado() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) throw new Error("vazio");
+    const parsed = JSON.parse(raw);
+    return {
+      colecao: parsed.colecao || {}, // { cardId: quantidade }
+      pacotesAbertos: parsed.pacotesAbertos || 0,
+    };
+  } catch {
+    return { colecao: {}, pacotesAbertos: 0 };
+  }
+}
 
-    <section id="view-colecao" class="view">
-      <div class="stats-bar">
-        <div class="stat">
-          <div class="value"><span id="stats-collected">0</span>/<span id="stats-total">0</span></div>
-          <div class="label">Figurinhas</div>
+function salvarEstado() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
+}
+
+let estado = carregarEstado();
+
+// ---------- Sorteio ----------
+function sortearRaridade(pool) {
+  const total = pool.reduce((sum, r) => sum + RARITIES[r].weight, 0);
+  let roll = Math.random() * total;
+  for (const r of pool) {
+    roll -= RARITIES[r].weight;
+    if (roll <= 0) return r;
+  }
+  return pool[pool.length - 1];
+}
+
+function sortearCarta(raridade) {
+  const grupo = CARDS_BY_RARITY[raridade];
+  return grupo[Math.floor(Math.random() * grupo.length)];
+}
+
+const PACK_SIZE = 5;
+
+function abrirPacote() {
+  const cartas = [];
+  // 4 cartas com raridade normal
+  for (let i = 0; i < PACK_SIZE - 1; i++) {
+    const raridade = sortearRaridade(RARITY_ORDER);
+    cartas.push(sortearCarta(raridade));
+  }
+  // última carta: garantida incomum ou melhor (mecânica de "pity")
+  const raridadeGarantida = sortearRaridade(RARITY_ORDER.filter((r) => r !== "comum"));
+  cartas.push(sortearCarta(raridadeGarantida));
+
+  return cartas;
+}
+
+function registrarCartas(cartas) {
+  const novas = [];
+  cartas.forEach((carta) => {
+    const jaTinha = !!estado.colecao[carta.id];
+    estado.colecao[carta.id] = (estado.colecao[carta.id] || 0) + 1;
+    if (!jaTinha) novas.push(carta.id);
+  });
+  estado.pacotesAbertos += 1;
+  salvarEstado();
+  return novas;
+}
+
+// ---------- UI: elementos ----------
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
+
+const packArea = $("#pack-area");
+const packButton = $("#pack-button");
+const revealArea = $("#reveal-area");
+const tabButtons = $$(".tab-btn");
+const views = $$(".view");
+const collectionGrid = $("#collection-grid");
+const statsCollected = $("#stats-collected");
+const statsTotal = $("#stats-total");
+const statsPacks = $("#stats-packs");
+const progressFill = $("#progress-fill");
+const resetBtn = $("#reset-btn");
+const toast = $("#toast");
+
+// ---------- Navegação entre abas ----------
+tabButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    tabButtons.forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    const target = btn.dataset.tab;
+    views.forEach((v) => v.classList.toggle("active", v.id === `view-${target}`));
+    if (target === "colecao") renderizarColecao();
+  });
+});
+
+// ---------- Abertura de pacote ----------
+let abrindo = false;
+
+packButton.addEventListener("click", () => {
+  if (abrindo) return;
+  abrindo = true;
+  packButton.disabled = true;
+  packButton.classList.add("hidden");
+  packArea.classList.add("shaking");
+
+  setTimeout(() => {
+    packArea.classList.remove("shaking");
+    packArea.classList.add("opened");
+    const cartas = abrirPacote();
+    const novasIds = registrarCartas(cartas);
+    mostrarCartas(cartas, novasIds);
+  }, 700);
+});
+
+function mostrarCartas(cartas, novasIds) {
+  revealArea.innerHTML = "";
+  revealArea.classList.add("visible");
+
+  cartas.forEach((carta, idx) => {
+    const isNova = novasIds.includes(carta.id);
+    const cardEl = document.createElement("div");
+    cardEl.className = `card rarity-${carta.raridade} flip-in`;
+    cardEl.style.animationDelay = `${idx * 0.18}s`;
+    cardEl.innerHTML = `
+      <div class="card-inner">
+        <div class="card-face card-back">
+          <img class="card-back-img" src="${UNKNOWN_IMG}" alt="" />
         </div>
-        <div class="stat">
-          <div class="value" id="stats-packs">0</div>
-          <div class="label">Pacotes abertos</div>
+        <div class="card-face card-front">
+          ${isNova ? '<span class="badge-new">NOVA!</span>' : ""}
+          <img class="card-img" src="${carta.src}" alt="" />
+          <div class="card-rarity">${RARITIES[carta.raridade].label}</div>
         </div>
       </div>
+    `;
+    revealArea.appendChild(cardEl);
+  });
 
-      <div class="progress-bar">
-        <div class="progress-fill" id="progress-fill" style="width: 0%">0%</div>
-      </div>
+  const resumoBtn = document.createElement("button");
+  resumoBtn.id = "abrir-outro-btn";
+  resumoBtn.className = "primary-btn";
+  resumoBtn.textContent = "Abrir outro pacote";
+  resumoBtn.addEventListener("click", () => {
+    revealArea.classList.remove("visible");
+    packButton.classList.remove("hidden");
+    revealArea.innerHTML = "";
+    packArea.classList.remove("opened");
+    packButton.disabled = false;
+    abrindo = false;
+  });
+  revealArea.appendChild(resumoBtn);
 
-      <div id="collection-grid"></div>
+  if (novasIds.length > 0) {
+    mostrarToast(`+${novasIds.length} nova(s) figurinha(s) descoberta(s)!`);
+  }
 
-      <div class="danger-zone">
-        <button id="reset-btn" class="text-btn">Reiniciar coleção</button>
-      </div>
-    </section>
-  </main>
+  atualizarStatsResumo();
+}
 
-  <div id="toast"></div>
+function mostrarToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add("show");
+  clearTimeout(mostrarToast._t);
+  mostrarToast._t = setTimeout(() => toast.classList.remove("show"), 2600);
+}
 
-  <script src="js/cards.js"></script>
-  <script src="js/app.js"></script>
-</body>
-</html>
+// ---------- Coleção ----------
+function renderizarColecao() {
+  collectionGrid.innerHTML = "";
+
+  RARITY_ORDER.forEach((raridade) => {
+    const grupo = CARDS_BY_RARITY[raridade];
+    const secao = document.createElement("section");
+    secao.className = "rarity-section";
+    secao.innerHTML = `<h3 class="rarity-title rarity-${raridade}-text">${RARITIES[raridade].label}</h3>`;
+
+    const grid = document.createElement("div");
+    grid.className = "mini-grid";
+
+    grupo.forEach((carta) => {
+      const qtd = estado.colecao[carta.id] || 0;
+      const owned = qtd > 0;
+      const item = document.createElement("div");
+      item.className = `mini-card rarity-${carta.raridade} ${owned ? "owned" : "locked"}`;
+      item.innerHTML = owned
+        ? `
+          <img class="mini-img" src="${carta.src}" alt="" />
+          ${qtd > 1 ? `<div class="mini-qty">x${qtd}</div>` : ""}
+        `
+        : `
+          <img class="mini-locked-img" src="${UNKNOWN_IMG}" alt="" />
+          <div class="mini-name">???</div>
+        `;
+      grid.appendChild(item);
+    });
+
+    secao.appendChild(grid);
+    collectionGrid.appendChild(secao);
+  });
+
+  atualizarStatsResumo();
+}
+
+function atualizarStatsResumo() {
+  const totalCartas = CARD_POOL.length;
+  const colecionadas = Object.keys(estado.colecao).length;
+  statsCollected.textContent = colecionadas;
+  statsTotal.textContent = totalCartas;
+  statsPacks.textContent = estado.pacotesAbertos;
+  const pct = totalCartas === 0 ? 0 : Math.round((colecionadas / totalCartas) * 100);
+  progressFill.style.width = `${pct}%`;
+  progressFill.textContent = `${pct}%`;
+}
+
+// ---------- Reset ----------
+resetBtn.addEventListener("click", () => {
+  if (!confirm("Isso vai apagar toda a sua coleção. Tem certeza?")) return;
+  estado = { colecao: {}, pacotesAbertos: 0 };
+  salvarEstado();
+  atualizarStatsResumo();
+  renderizarColecao();
+  mostrarToast("Coleção reiniciada.");
+});
+
+// ---------- Inicialização ----------
+atualizarStatsResumo();
